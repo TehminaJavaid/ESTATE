@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useDebugValue } from "react";
 import {
   Container,
   Card,
@@ -18,6 +18,9 @@ import {
   Button,
 } from "reactstrap";
 import { Link } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
+import axios from "axios";
+import Image from "./Image";
 import api from "../../apiCalls/api";
 import { Map, InfoWindow, Marker, GoogleApiWrapper } from "google-maps-react";
 import classnames from "classnames";
@@ -42,9 +45,9 @@ const AddProject = (props) => {
       { title: "Add Prroject", link: "#" },
     ],
     activeTab: 1,
-    selectedFiles: [],
     progressValue: 25,
   });
+  const instance = axios.create();
   const [activeTabProgress, setActivetabprogress] = useState(1);
   const [projectID, setProjectID] = useState(0);
   const [countfloors, setcountFloors] = useState(1);
@@ -57,16 +60,37 @@ const AddProject = (props) => {
   const [changecitydropvalue, setCityDropvalue] = useState(false);
   const [changeplacedropvalue, setPlaceDropvalue] = useState(false);
   const [changeblockdropvalue, setBlockDropvalue] = useState(false);
+  const [test, setTest] = useState([]);
   const [projectform, setProjectform] = useState({
-    id: "",
+    code: "",
     name: "",
     description: "",
     address: "",
-    videourl: "",
-    region_id: "",
+    type: "",
+    video: "",
     city_id: "",
-    place_id: "",
+    region_id: "",
+    area_id: "",
+    lat: 37.778519,
+    lng: -122.40564,
+    proimage: [],
   });
+  useEffect(() => {
+    debugger;
+    api.login().then((response) => {
+      console.log("kkk", response.data);
+      setRegionslist(response.data.message);
+    });
+  }, []);
+  useEffect(() => {}, [regionslist]);
+  const handleChange = (evt) => {
+    const value = evt.target.value;
+    console.log("value", value);
+    setProjectform({
+      ...projectform,
+      [evt.target.name]: value,
+    });
+  };
   const [floors, setFloors] = useState({
     rows: [
       {
@@ -80,6 +104,7 @@ const AddProject = (props) => {
         unit_num: "",
         unit_type: "",
         unit_size: "",
+        unit_price: "",
       },
     ],
   });
@@ -92,30 +117,9 @@ const AddProject = (props) => {
   });
 
   useEffect(() => {
-    setProjectID(Math.floor((1 + Math.random()) * 0x10000) + "c");
+    setProjectID("A" + Math.floor((1 + Math.random()) * 0x10000) + "c");
   }, []);
   useEffect(() => {}, [projectID]);
-  //Regions
-  useEffect(() => {
-    api
-      .login()
-      .then((response) => response.json())
-      .then((json) => setRegionslist(json.message));
-  }, []);
-  useEffect(() => {}, [regionslist]);
-  const handleChange = (evt) => {
-    const value = evt.target.value;
-    console.log("value", value);
-    setProjectform({
-      ...projectform,
-      [evt.target.name]: value,
-    });
-  };
-
-  /*this.onMarkerClick = this.onMarkerClick.bind(this);
-    this.handleAcceptedFiles = this.handleAcceptedFiles.bind(this);
-    this.toggleTab.bind(this);
-    this.toggleTabProgress.bind(this);*/
 
   const handleAcceptedFiles = (files) => {
     files.map((file) =>
@@ -124,8 +128,9 @@ const AddProject = (props) => {
         formattedSize: formatBytes(file.size),
       })
     );
-
-    setState({ selectedFiles: files });
+    debugger;
+    setTest(files);
+    //setProjectform({ ...projectform, proimage: files });
   };
 
   /**
@@ -200,6 +205,7 @@ const AddProject = (props) => {
       unit_num: "",
       unit_type: "",
       unit_size: "",
+      unit_price: "",
     };
     setUnits({
       rows: [...units.rows, item],
@@ -260,31 +266,91 @@ const AddProject = (props) => {
     setCityDropvalue(false);
     setPlaceDropvalue(false);
     console.log("changedrop", changedropvalue);
-    api
-      .city(dropvalue)
-      .then((response) => response.json())
-      .then((json) => {
-        setCitieslist(json.message);
-        setCityDropvalue(json.message);
-      });
+    api.city(dropvalue).then((response) => {
+      console.log("kkk", response.data);
+      setCitieslist(response.data.message);
+      setCityDropvalue(response.data.message);
+    });
+    // .then((response) =>response.json())
+    // .then((json) => {
+    //   console.log("ppp",json)
+    //   setCitieslist(json.message);
+    //   setCityDropvalue(json.message);
+    // });
   }
   function setPlaceDropdown(dropvalue) {
     setCityDropvalue(dropvalue);
     setPlaceDropvalue(false);
     console.log("selectedvalue", dropvalue);
-    api
-      .area(dropvalue)
-      .then((response) => response.json())
-      .then((json) => {
-        setPlaceslist(json.message);
-        setPlaceDropvalue(json.message);
-      });
+    api.area(dropvalue).then((response) => {
+      console.log("kkk", response.data);
+      setPlaceslist(response.data.message);
+      setPlaceDropvalue(response.data.message);
+    });
   }
   function setBlockDropdown(dropvalue) {
     setBlockDropvalue(dropvalue);
     setProjectform({
       ...projectform,
-      block_id: dropvalue,
+      code: projectID,
+      area_id: dropvalue,
+    });
+    console.log("projectform", projectform);
+  }
+  const fileSelectedHandler = (e) => {
+    setProjectform({
+      ...projectform,
+      files: [...projectform.files, e.target.files],
+    });
+  };
+  const getUploadParams = ({ meta }) => {
+    const url = "https://estate92.herokuapp.com/api/test";
+    return {
+      url,
+      meta: { fileUrl: `${url}/${encodeURIComponent(meta.name)}` },
+    };
+  };
+
+  function handleChangeStatus({ meta }, status) {
+    console.log("picture");
+    console.log(status, meta);
+  }
+
+  const handleSubmit = (files, allFiles) => {
+    console.log(files && files.map((f) => f.meta));
+    allFiles.forEach((f) => f.remove());
+  };
+  const onFileChange = event => {
+    
+    // Update the state
+    this.setState({ selectedFile: event.target.files[0] });
+  
+  };
+  async function projectSubmit() {
+    /*Object.keys(projectform).forEach((key) => {
+      formdata.append(key, projectform[key]);
+    });*/
+    /*console.log("projectform", projectform);
+    const formdata = new FormData();
+    formdata.append("code", projectform.code);
+    formdata.append("name", projectform.name);
+    formdata.append("description", projectform.description);
+    formdata.append("address", projectform.address);
+    formdata.append("type", projectform.type);
+    formdata.append("video", projectform.video);
+    formdata.append("city_id", projectform.city_id);
+    formdata.append("region_id", projectform.region_id);
+    formdata.append("area_id", projectform.area_id);
+    formdata.append("lat", projectform.lat);
+    formdata.append("lng", projectform.lng);
+    formdata.append("projectimage", projectform.proimage);
+    console.log("formdata", formdata);*/
+    const formdata = new FormData();
+    formdata.append("value", test);
+    console.log("formdata1", formdata);
+
+    await api.addproject(formdata).then((response) => {
+      console.log("kkk", response.status);
     });
   }
   const toggleTabProgress = (tab) => {
@@ -461,11 +527,21 @@ const AddProject = (props) => {
                             <Col md={4}>
                               <FormGroup>
                                 <Label className="control-label">Type</Label>
-                                <select className="form-control select2">
+                                <select
+                                  className="form-control select2"
+                                  onChange={(value) => {
+                                    setProjectform({
+                                      ...projectform,
+                                      type: value.target.value,
+                                    });
+                                  }}
+                                >
                                   <option>Select</option>
-                                  <option value="EL">Commercial</option>
-                                  <option value="FA">Residencial</option>
-                                  <option value="FI">plot</option>
+                                  <option value="Commercial">Commercial</option>
+                                  <option value="Residencial">
+                                    Residencial
+                                  </option>
+                                  <option value="Plot">plot</option>
                                 </select>
                               </FormGroup>
                             </Col>
@@ -505,11 +581,17 @@ const AddProject = (props) => {
                                 <Label className="control-label">Region</Label>
                                 <select
                                   className="form-control select2"
+                                  placeholder="Select Region"
                                   value={changedropvalue}
-                                  onChange={(value) =>
-                                    setCityDropdown(value.target.value)
-                                  }
+                                  onChange={(value) => {
+                                    setCityDropdown(value.target.value);
+                                    setProjectform({
+                                      ...projectform,
+                                      region_id: value.target.value,
+                                    });
+                                  }}
                                 >
+                                  {<option value="0">Select Region</option>}
                                   {Object.entries(regionslist).map(
                                     ([key, val]) => (
                                       <option value={val.id}>
@@ -523,121 +605,166 @@ const AddProject = (props) => {
                             <Col md={4}>
                               <FormGroup>
                                 <Label className="control-label">City</Label>
-                                <select
-                                  className="form-control select2"
-                                  value={changecitydropvalue}
-                                  onChange={(value) =>
-                                    setPlaceDropdown(value.target.value)
-                                  }
-                                >
-                                  {Object.entries(citieslist).map(
-                                    ([key, val]) => (
-                                      <option value={val.id}>
-                                        {val.city_name}
-                                      </option>
-                                    )
-                                  )}
-                                </select>
+
+                                {!(citieslist === "No Cities Found") ? (
+                                  <select
+                                    className="form-control select2"
+                                    value={changecitydropvalue}
+                                    onChange={(value) => {
+                                      setPlaceDropdown(value.target.value);
+                                      setProjectform({
+                                        ...projectform,
+                                        city_id: value.target.value,
+                                      });
+                                    }}
+                                  >
+                                    <option value="0">Select City</option>
+                                    {Object.entries(citieslist).map(
+                                      ([key, val]) => (
+                                        <option value={val.id}>
+                                          {val.city_name}
+                                        </option>
+                                      )
+                                    )}
+                                  </select>
+                                ) : (
+                                  <select
+                                    className="form-control select2"
+                                    value={changecitydropvalue}
+                                    onChange={(value) =>
+                                      setPlaceDropdown(value.target.value)
+                                    }
+                                  >
+                                    <option value="1">No Cities Found</option>
+                                  </select>
+                                )}
                               </FormGroup>
                             </Col>
                             <Col md={4}>
                               <FormGroup>
                                 <Label className="control-label">Area</Label>
-                                <select
-                                  className="form-control select2"
-                                  value={changeplacedropvalue}
-                                  onChange={(value) =>
-                                    setBlockDropdown(value.target.value)
-                                  }
-                                >
-                                  {Object.entries(placeslist).map(
-                                    ([key, val]) => (
-                                      <option value={val.id}>{val.name}</option>
-                                    )
-                                  )}
-                                </select>
+                                {changeplacedropvalue === false ? (
+                                  <select
+                                    className="form-control select2"
+                                    onChange={(value) =>
+                                      setBlockDropdown(value.target.value)
+                                    }
+                                  >
+                                    <option value="0">Select Area</option>
+                                  </select>
+                                ) : (
+                                  <span>
+                                    {console.log("yooo")}
+                                    {!(placeslist === "No Places Found") ? (
+                                      <select
+                                        className="form-control select2"
+                                        onChange={(value) =>
+                                          setBlockDropdown(value.target.value)
+                                        }
+                                      >
+                                        <option value="1">Select Area</option>
+                                        {Object.entries(placeslist).map(
+                                          ([key, val]) => (
+                                            <option value={val.id}>
+                                              {val.name}
+                                            </option>
+                                          )
+                                        )}
+                                      </select>
+                                    ) : (
+                                      <select
+                                        className="form-control select2"
+                                        onChange={(value) =>
+                                          setBlockDropdown(value.target.value)
+                                        }
+                                      >
+                                        <option value="0">
+                                          No Places Found
+                                        </option>
+                                      </select>
+                                    )}
+                                  </span>
+                                )}
                               </FormGroup>
                             </Col>
                           </Row>
-                          <Row>
-                            <Col md={12}>
-                              <div style={{ marginTop: "30px" }}>
-                                <Dropzone
-                                  onDrop={(acceptedFiles) =>
-                                    handleAcceptedFiles(acceptedFiles)
-                                  }
-                                >
-                                  {({ getRootProps, getInputProps }) => (
-                                    <div className="dropzone">
-                                      <div
-                                        style={{ height: "20px" }}
-                                        className="dz-message needsclick mt-2"
-                                        {...getRootProps()}
-                                      >
-                                        <input {...getInputProps()} />
-                                        <div style={{ marginTop: "-40px" }}>
-                                          <i className="display-4 text-muted ri-upload-cloud-2-line"></i>
-                                        </div>
-                                        <h4>
-                                          Drop images here or click to upload.
-                                        </h4>
-                                      </div>
-                                    </div>
-                                  )}
-                                </Dropzone>
+
+                        
+
+                          {/* <Dropzone
+                            //getUploadParams={getUploadParams}
+                            //onChangeStatus={handleChangeStatus}
+                            //onSubmit={handleSubmit}
+                            //accept="image/*,audio/*,video/*"
+                            onDrop={(acceptedFiles) =>
+                              handleAcceptedFiles(acceptedFiles)
+                            }
+                          >
+                            {({ getRootProps, getInputProps }) => (
+                              <div className="dropzone">
                                 <div
-                                  className="dropzone-previews mt-3"
-                                  id="file-previews"
+                                  className="dz-message needsclick mt-2"
+                                  {...getRootProps()}
                                 >
-                                  {state.selectedFiles.map((f, i) => {
-                                    return (
-                                      <Card
-                                        className="mt-1 mb-0 shadow-none border dz-processing dz-image-preview dz-success dz-complete"
-                                        key={i + "-file"}
-                                      >
-                                        <div className="p-2">
-                                          <Row className="align-items-center">
-                                            <Col className="col-auto">
-                                              <img
-                                                data-dz-thumbnail=""
-                                                height="80"
-                                                className="avatar-sm rounded bg-light"
-                                                alt={f.name}
-                                                src={f.preview}
-                                              />
-                                            </Col>
-                                            <Col>
-                                              <Link
-                                                to="#"
-                                                className="text-muted font-weight-bold"
-                                              >
-                                                {f.name}
-                                              </Link>
-                                              <p className="mb-0">
-                                                <strong>
-                                                  {f.formattedSize}
-                                                </strong>
-                                              </p>
-                                            </Col>
-                                          </Row>
-                                        </div>
-                                      </Card>
-                                    );
-                                  })}
+                                  <input {...getInputProps()} />
+                                  <div className="mb-3">
+                                    <i className="display-4 text-muted ri-upload-cloud-2-line"></i>
+                                  </div>
+                                  <h4>Drop files here or click to upload.</h4>
                                 </div>
                               </div>
-                            </Col>
-                          </Row>
+                            )}
+                          </Dropzone> */}
+                          {/*<div
+                            className="dropzone-previews mt-3"
+                            id="file-previews"
+                          >
+                            {projectform.proimage.map((f, i) => {
+                              return (
+                                <Card
+                                  className="mt-1 mb-0 shadow-none border dz-processing dz-image-preview dz-success dz-complete"
+                                  key={i + "-file"}
+                                >
+                                  <div className="p-2">
+                                    <Row className="align-items-center">
+                                      <Col className="col-auto">
+                                        <img
+                                          data-dz-thumbnail=""
+                                          height="80"
+                                          className="avatar-sm rounded bg-light"
+                                          alt={f.name}
+                                          src={f.preview}
+                                        />
+                                      </Col>
+                                      <Col>
+                                        <Link
+                                          to="#"
+                                          className="text-muted font-weight-bold"
+                                        >
+                                          {f.name}
+                                        </Link>
+                                        <p className="mb-0">
+                                          <strong>{f.formattedSize}</strong>
+                                        </p>
+                                      </Col>
+                                    </Row>
+                                  </div>
+                                </Card>
+                              );
+                            })}
+                          </div>*/}
+                          <input type="file" name="myImage" onChange={onFileChange} />
+
                           <Row>
                             <Col md={12}>
                               <FormGroup>
                                 <Label htmlFor="videourl">Video URL</Label>
                                 <Input
-                                  id="videourl"
-                                  name="videourl"
+                                  id="video"
+                                  name="video"
                                   type="text"
                                   className="form-control"
-                                  value={projectform.videourl}
+                                  value={projectform.video}
                                   onChange={handleChange}
                                 />
                               </FormGroup>
@@ -676,6 +803,21 @@ const AddProject = (props) => {
                                   </Map>
                                 </div>
                               </div>
+                            </Col>
+                          </Row>
+                          <Row>
+                            <Col md={12}>
+                              <Button
+                                type="button"
+                                size="lg"
+                                block
+                                className="waves-effect waves-light"
+                                color="primary"
+                                style={{ marginTop: "20px" }}
+                                onClick={projectSubmit}
+                              >
+                                Submit
+                              </Button>
                             </Col>
                           </Row>
                         </Form>
@@ -1233,7 +1375,7 @@ const AddProject = (props) => {
                                     />
                                   </FormGroup>
                                 </Col>
-                                <Col md={3}>
+                                <Col md={2}>
                                   <FormGroup>
                                     <Input
                                       id="type"
@@ -1246,7 +1388,7 @@ const AddProject = (props) => {
                                     />
                                   </FormGroup>
                                 </Col>
-                                <Col md={3}>
+                                <Col md={2}>
                                   <FormGroup>
                                     <Input
                                       id="size"
@@ -1259,7 +1401,20 @@ const AddProject = (props) => {
                                     />
                                   </FormGroup>
                                 </Col>
-                                <Col md={3}>
+                                <Col md={2}>
+                                  <FormGroup>
+                                    <Input
+                                      id="price"
+                                      name="price"
+                                      type="text"
+                                      placeholder="Price"
+                                      className="form-control"
+                                      value={units.rows[index].unit_price}
+                                      onChange={handleChangeUnit(index)}
+                                    />
+                                  </FormGroup>
+                                </Col>
+                                <Col md={2}>
                                   <FormGroup>
                                     <Input
                                       id="image"
@@ -1270,7 +1425,8 @@ const AddProject = (props) => {
                                     />
                                   </FormGroup>
                                 </Col>
-                                <Col md={1}>
+
+                                <Col md={2}>
                                   <FormGroup>
                                     {index === 0 ? (
                                       <Button
@@ -1328,7 +1484,7 @@ const AddProject = (props) => {
                             className="dropzone-previews mt-3"
                             id="file-previews"
                           >
-                            {state.selectedFiles.map((f, i) => {
+                            {projectform.proimage.map((f, i) => {
                               return (
                                 <Card
                                   className="mt-1 mb-0 shadow-none border dz-processing dz-image-preview dz-success dz-complete"
